@@ -1,4 +1,4 @@
-\# 📡 Comunicación UART Bidireccional (Chat)
+# 📡 Comunicación UART Bidireccional (Chat)
 
 
 
@@ -6,17 +6,17 @@ Breve descripción de 1-2 líneas. Ejemplo: \*Implementación bare-metal de comu
 
 
 
-\## ⚙️ Características Técnicas
+## ⚙️ Características Técnicas
 
-\* \*\*Microcontrolador:\*\* NXP LPC1768 (ARM Cortex-M3)
+\*\*Microcontrolador:\*\* NXP LPC1768 (ARM Cortex-M3)
 
-\* \*\*Periféricos usados:\*\* UART0, NVIC (Interrupciones)
+\*\*Periféricos usados:\*\* UART0, NVIC (Interrupciones)
 
-\* \*\*Baudrate:\*\* 115200 bps | 8 Data bits | 1 Stop bit | No Parity
+\*\*Baudrate:\*\* 115200 bps | 8 Data bits | 1 Stop bit | No Parity
 
 
 
-\## 🔌 Pinout y Conexiones Físicas
+## 🔌 Pinout y Conexiones Físicas
 
 
 
@@ -32,7 +32,7 @@ Breve descripción de 1-2 líneas. Ejemplo: \*Implementación bare-metal de comu
 
 
 
-\## 🧠 Lógica Implementada
+## 🧠 Lógica Implementada
 
 1\. \*\*Configuración de Relojes:\*\* Se ajusta el `PCLK` para el periférico UART.
 
@@ -42,7 +42,7 @@ Breve descripción de 1-2 líneas. Ejemplo: \*Implementación bare-metal de comu
 
 
 
-\## 🚀 Cómo compilar
+## 🚀 Cómo compilar
 
 1\. Abre el archivo `NombreProyecto.uvprojx` con Keil uVision 5.
 
