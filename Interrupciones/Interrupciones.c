@@ -5,26 +5,29 @@
 #include "..\libfiles\delay.c"
 
 /*
-            EJERCICIO: PARPADEO LED CON RIT E INTERRUPCIÓN POR GPIO
+            EJERCICIO: PARPADEO LED CON RIT Y DOBLE INTERRUPCIÓN POR GPIO
             Autor: Adrián Hernández Lillo
             Asignatura: Servicios Electrónicos Digitales
             
             Descripción: 
-            Control de parpadeo del LED1 integrado mediante el temporizador RIT. 
-            El cambio de velocidad se realiza mediante una interrupción externa 
-            por GPIO (EINT3) accionada por el pulsador E7. Se implementa rutina 
-            anti-rebote por software y reinicio del timer para evitar overflow.
+            Control de la velocidad de parpadeo del LED1 integrado mediante 
+            el temporizador RIT. El ajuste se realiza mediante dos pulsadores 
+            configurados como interrupciones externas por GPIO (EINT3). El 
+            pulsador E6 incrementa la velocidad (hasta 4/4) y el E7 la decrementa 
+            (hasta 1/4). Se implementa rutina anti-rebote por software y 
+            reinicio del timer en cada cambio para evitar overflow.
             
-						CONEXIONES FÍSICAS (SETUP UNIVERSAL):
-						- LED1      --> Integrado en placa (P1_18)
-						- PULSADOR  --> PIN 8 (P0_6) (Pulsador E7)
-						- LCD RS    --> PIN 23 (P2_3)
-						- LCD RW    --> PIN 22 (P2_4)
-						- LCD E     --> PIN 21 (P2_5)
-						- LCD D7(L7)--> PIN 24 (P2_2)ç
-						- LCD D6(L6)--> PIN 25 (P2_1)
-						- LCD D5(L5)--> PIN 30 (P0_4)
-						- LCD D4(L4)--> PIN 29 (P0_5)
+            CONEXIONES FÍSICAS (SETUP UNIVERSAL):
+            - LED1      --> Integrado en placa (P1_18)
+            - PULS_INC  --> PIN 7 (P0_7) (Pulsador E6 - Incrementa)
+            - PULS_DEC  --> PIN 8 (P0_6) (Pulsador E7 - Decrementa)
+            - LCD RS    --> PIN 23 (P2_3)
+            - LCD RW    --> PIN 22 (P2_4)
+            - LCD E     --> PIN 21 (P2_5)
+            - LCD D7(L7)--> PIN 24 (P2_2)
+            - LCD D6(L6)--> PIN 25 (P2_1)
+            - LCD D5(L5)--> PIN 30 (P0_4)
+            - LCD D4(L4)--> PIN 29 (P0_5)
 */
 
 // --- PINES LCD ---
@@ -38,7 +41,8 @@
 
 // --- PINES HARDWARE ---
 #define LED1 P1_18
-#define PULSADOR P0_6 
+#define PULS_INC P0_7 // Pin 7
+#define PULS_DEC P0_6 // Pin 8
 
 // Variables globales volátiles (modificadas en las ISR)
 volatile uint8_t nivel_velocidad = 1;
@@ -65,7 +69,9 @@ int main(void) {
     // Configuración del hardware local
     GPIO_PinDirection(LED1, OUTPUT); 
     GPIO_PinWrite(LED1, LOW);
-    GPIO_PinDirection(PULSADOR, INPUT);
+    
+    GPIO_PinDirection(PULS_INC, INPUT);
+    GPIO_PinDirection(PULS_DEC, INPUT);
     
     // --- Configuración del Timer RIT ---
     LPC_RIT->RICOUNTER = 0x00;           // Reset del contador
@@ -77,9 +83,9 @@ int main(void) {
     
     NVIC_EnableIRQ(RIT_IRQn);            
     
-    // --- Configuración Interrupción Externa (GPIO) ---
-    LPC_GPIOINT->IO0IntClr = (1 << 6);   // Limpiar interrupciones pendientes en P0.6
-    LPC_GPIOINT->IO0IntEnF |= (1 << 6);  // Habilitar interrupción por flanco de bajada
+    // --- Configuración Interrupciones Externas (GPIO) ---
+    LPC_GPIOINT->IO0IntClr = (1 << 6) | (1 << 7);   // Limpiar interrupciones pendientes en P0.6 y P0.7
+    LPC_GPIOINT->IO0IntEnF |= (1 << 6) | (1 << 7);  // Habilitar interrupciones por flanco de bajada
     NVIC_EnableIRQ(EINT3_IRQn); 
     
     // Bucle principal
@@ -88,7 +94,7 @@ int main(void) {
         // Refresco condicional de la pantalla para no saturar el LCD
         if (actualizar_pantalla == 1) {
             LCD_GoToLine(1);
-            LCD_Printf("Velocidad: %d/4", nivel_velocidad);
+            LCD_Printf("Velocidad: %d/4 ", nivel_velocidad);
             actualizar_pantalla = 0; 
         }
         
@@ -104,22 +110,33 @@ int main(void) {
 // ISR del Timer RIT (Controla el toggle del LED)
 void RIT_IRQHandler(void) {
     
-    // Clear interrupt flag
+    // Limpiar flag de interrupción
     LPC_RIT->RICTRL |= (0x1 << 0); 
     GPIO_PinToggle(LED1); 
 }
 
 // ISR de Interrupciones GPIO (Comparte el vector EINT3)
 void EINT3_IRQHandler(void) {
+    uint8_t cambio_realizado = 0;
     
-    // Verificar si la interrupción proviene del Pin 0.6 (Flanco de bajada)
-    if (LPC_GPIOINT->IO0IntStatF & (1 << 6)) {
-        
-        // Máquina de estados para la velocidad (cíclica 1-4)
-        nivel_velocidad++;
-        if(nivel_velocidad > 4) {
-            nivel_velocidad = 1; 
+    // Verificar si la interrupción proviene del Pulsador E6 (Incremento - P0.7)
+    if (LPC_GPIOINT->IO0IntStatF & (1 << 7)) {
+        if (nivel_velocidad < 4) {
+            nivel_velocidad++;
+            cambio_realizado = 1;
         }
+    }
+    
+    // Verificar si la interrupción proviene del Pulsador E7 (Decremento - P0.6)
+    if (LPC_GPIOINT->IO0IntStatF & (1 << 6)) {
+        if (nivel_velocidad > 1) {
+            nivel_velocidad--;
+            cambio_realizado = 1;
+        }
+    }
+    
+    // Aplicar los cambios en el temporizador solo si la velocidad ha sido modificada
+    if (cambio_realizado == 1) {
         
         // Actualización del registro de comparación según el nivel
         if(nivel_velocidad == 1) LPC_RIT->RICOMPVAL = 25000000; // 1s
@@ -131,11 +148,11 @@ void EINT3_IRQHandler(void) {
         LPC_RIT->RICOUNTER = 0x00; 
         
         actualizar_pantalla = 1; 
-        
-        // Debounce por software (anti-rebotes)
-        DELAY_ms(50); 
-        
-        // Limpiar el flag de la interrupción tras el delay para ignorar rebotes
-        LPC_GPIOINT->IO0IntClr = (1 << 6);
     }
+    
+    // Debounce por software (anti-rebotes)
+    DELAY_ms(50); 
+    
+    // Limpiar los flags de ambas interrupciones tras el delay para ignorar rebotes
+    LPC_GPIOINT->IO0IntClr = (1 << 6) | (1 << 7);
 }
